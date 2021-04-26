@@ -27,13 +27,11 @@ function Get-Action {
 function Get-IPInfo {
   
   # Validate user entered IP address
-  # ***********THIS IS WHAT WE'RE WORKING ON
-    # *********** https://ridicurious.com/2018/11/14/4-ways-to-validate-ipaddress-in-powershell/ ***********
-  $IPAddr = Read-Host -Prompt "Enter Enter IP Address" | Format-IPAddr ("Enter IP Address")
-  $Mask = Format-IPAddr ('Enter net mask')
-  $Gateway = Format-IPAddr ('Enter default gateway')
-  $PriDNS = Format-IPAddr ('Enter primary DNS server address')
-  $SecDNS = Format-IPAddr ('Enter secondary DNS server address')
+  $IPAddr = Format-IPAddr (Read-Host -Prompt 'Enter IP Address')
+  $Mask = Format-IPAddr (Read-Host -Prompt 'Enter net mask')
+  $Gateway = Format-IPAddr (Read-Host -Prompt 'Enter default gateway')
+  $PriDNS = Format-IPAddr (Read-Host -Prompt 'Enter primary DNS server address')
+  $SecDNS = Format-IPAddr (Read-Host -Prompt 'Enter secondary DNS server address')
   
   $load = ($IPAddr, $Mask, $Gateway, $PriDNS, $SecDNS)
 
@@ -43,7 +41,7 @@ function Get-IPInfo {
 # Confirm the static stuff...
 function Confirm-Static {
   $title = "Modify $($Interface) interface?"
-  $message = "Are you sure you want to modify $($Interface) interface to Static IP with the following characteristics? IP: $($IPAddr), Net Mask: $($Mask), Gateway: $($Gateway), Primary DNS: $($PriDNS), Secondary DNS: $($SecDNS)"
+  $message = "Are you sure you want to modify $($Interface) interface to Static IP with the following characteristics? IP: $($load[0]), Net Mask: $($load[1]), Gateway: $($load[2]), Primary DNS: $($load[3]), Secondary DNS: $($load[4])"
 
   # Create answers
   $yes = New-Object System.Management.Automation.Host.ChoiceDescription "&Yes", "Configure network interface."
@@ -58,7 +56,7 @@ function Confirm-Static {
 
   # Perform action based on answer
   switch ($response) {
-      0 { Write-Host "Modifying $($Interface) to $($load)"; Enable-Static Start-Sleep s-3; break } # Yes
+      0 { Write-Host "Modifying $($Interface) to $($load)"; Enable-Static $load Start-Sleep s-3; break } # Yes
       1 { Get-IPInfo } # No
       2 { Write-Host 'Discarding changes and exiting...'; break } # Quit
   }
@@ -66,10 +64,6 @@ function Confirm-Static {
 
 # Do the static stuff...
 function Enable-Static {
-  
-  
-  
-  
 # Retrieve the network adapter that you want to configure
 
 # Remove any existing IP, gateway from our ipv4 adapter
@@ -82,7 +76,7 @@ If (($Interface | Get-NetIPConfiguration).Ipv4DefaultGateway) {
   $Interface | Remove-NetRoute -AddressFamily $IPType -Confirm:$false
 }
   
-  
+Set-DnsClientServerAddress -InterfaceAlias $Interface -ServerAddresses $load[3,4]
   
   
   break
@@ -131,39 +125,45 @@ function Enable-DHCP {
 }
 
 # Validate IP address format
-function Format-IPAddr($typ) {
-  $addr = Read-Host -Prompt "Enter $($typ)"
-  $valid = $addr -as [IPAddress]
+function Format-IPAddr($addr) {
+  $valid = $addr -as [IPAddress] -as [Bool]
 
   if ($valid) {
     return $addr
   }
   else {
-    Get-IPInfo
-  }
-}
-
-# Validate IP address format
-function Format-IPAddrNC($typ) {
-  $addr = Read-Host -Prompt "Enter $($typ)"
-  $valid = $addr -as [IPAddress]
-
-  if ($valid) {
+    Write-Host 'WARNING: Invalid IPv4 address.'
     return $addr
   }
-  else {
-    Get-IPInfo
-  }
 }
 
-#This is the program entry point. Get Interface alias from user or default to Ethernet if none entered
 
-#Attempt to re-open with elevated instance
+#Get interface data...
+function InterfaceData {
+
+}
+
+# This is the program entry point. Get Interface alias from user or default to Ethernet if none entered
+
+# Attempt to re-open with elevated PowerShell instance
 if (-NOT ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")) {  
   $arguments = "& '" +$myinvocation.mycommand.definition + "'"
   Start-Process powershell -Verb runAs -ArgumentList $arguments
   Break
 }
+
+#Get-NetAdapter
+
+#$a = (Get-NetAdapter -Name "*" -InterfaceDescription "*" -Physical)
+#Get-NetAdapter | Select-Object -Property Name
+
+#$a += (Get-NetAdapter -Name "*" -InterfaceDescription "*" -Physical)
+#Get-NetAdapter -Physical |Select-Object Name
+Get-NetAdapter | Select-Object Name, InterfaceDescription, MediaConnectionState, LinkSpeed, PhysicalMediaType
+
+ 
+
+Write-Host "Adapters are: $($a)"
 
 $Interface = Read-Host -Prompt 'Enter Interface name (default is Ethernet)'
 if ([string]::IsNullOrWhiteSpace($Interface))
