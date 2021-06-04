@@ -137,33 +137,40 @@ function Format-IPAddr($addr) {
   }
 }
 
+function Get-AdapterInfo {
+  #Get-NetAdapter | Select-Object @(N = {$_.Name}; I = {$_.IfIndex})
 
-#Get interface data...
-function InterfaceData {
+$adapters = Get-NetAdapter | ForEach-Object {
+  $object = $_
+
+  $columns = $_ | Select-Object IfIndex | Sort-Object
+
+  $hashtable = @{}
+
+  $columns | ForEach-Object {
+    if (![String]::IsNullOrEmpty($object.$_))
+    {
+      $hashtable.$_ = $ object.$_
+    }
+  }
+  $hashtable
+}
+$hashtable | Out-GridView
 
 }
 
 # This is the program entry point. Get Interface alias from user or default to Ethernet if none entered
 
 # Attempt to re-open with elevated PowerShell instance
-if (-NOT ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")) {  
-  $arguments = "& '" +$myinvocation.mycommand.definition + "'"
-  Start-Process powershell -Verb runAs -ArgumentList $arguments
-  Break
-}
+#if (-NOT ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")) {  
+#  $arguments = "& '" +$myinvocation.mycommand.definition + "'"
+#  Start-Process powershell -Verb runAs -ArgumentList $arguments
+#  Break
+#}
 
-#Get-NetAdapter
-
-#$a = (Get-NetAdapter -Name "*" -InterfaceDescription "*" -Physical)
-#Get-NetAdapter | Select-Object -Property Name
-
-#$a += (Get-NetAdapter -Name "*" -InterfaceDescription "*" -Physical)
-#Get-NetAdapter -Physical |Select-Object Name
-Get-NetAdapter | Select-Object Name, InterfaceDescription, MediaConnectionState, LinkSpeed, PhysicalMediaType
-
- 
-
-Write-Host "Adapters are: $($a)"
+[Array] $a = @(Get-AdapterInfo)
+$a += (Get-NetAdapter | Select-Object Name, IfIndex)
+Write-Host "Adapters are $($a)"
 
 $Interface = Read-Host -Prompt 'Enter Interface name (default is Ethernet)'
 if ([string]::IsNullOrWhiteSpace($Interface))
@@ -172,3 +179,32 @@ if ([string]::IsNullOrWhiteSpace($Interface))
   }
 
  Get-Action
+
+ $params = @{ 'ComputerName'=$computer;
+ 'Class'='CIM_NetworkAdapter';
+ 'ErrorAction'='Stop'}
+
+$networks = Get-CimInstance @params | 
+Select-Object   @{label="ServerName"; Expression={$_.SystemName}}, 
+                                ProductName, 
+                                Name, 
+                                Manufacturer, 
+                                PhysicalAdapter, 
+                                Speed, 
+                                MACAddress, 
+                                GUID, 
+                                AdapterType, 
+                                Description, 
+                                DeviceID, 
+                                NetConnectionID, 
+                                NetConnectionStatus, 
+                                NetEnabled, 
+                                ServiceName, 
+                                Status, 
+                                StatusInfo 
+                                Write-Host "Adapters are $($networks)"
+
+
+$Net = Get-CimInstance -ClassName CIM_NetworkAdapter -Filter PhysicalAdapter true -ErrorAction Stop | Select-Object Name, Description
+
+-Filter “Name Like ‘power%'”
